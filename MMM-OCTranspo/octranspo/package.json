@@ -1,0 +1,27 @@
+{
+    "name": "octranspo",
+    "version": "0.0.1",
+    "description": "Simple wrapper for the OC Transpo API",
+    "keywords": [
+        "octranspo",
+        "ottawa",
+        "bus",
+        "lrt",
+        "transit"
+    ],
+    "author": "James Ellwood <jellwood@gmail.com>",
+    "engines": {
+      "node": ">=0.10"
+    },
+    "main": "lib/index.js",
+    "dependencies": {
+        "request": ">= 2.44.0"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git@github.com:lumberbarons/octranspo.git"
+    },
+    "bugs": {
+        "url": "https://github.com/lumberbarons/octranspo/issues"
+    }
+}
