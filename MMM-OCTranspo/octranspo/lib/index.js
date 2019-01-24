@@ -59,12 +59,11 @@ function getData(resource, resultName, data, callback) {
             callback(error);
         } else {
             try {
-                
                 var result = JSON.parse(body);
                 if(resultName) {
                     result = result[resultName];
                 }
-                
+
                 if(result.Error) {
                     callback(getErrorMsg(result.Error));
                 } else {
