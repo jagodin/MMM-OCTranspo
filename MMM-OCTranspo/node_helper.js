@@ -13,6 +13,8 @@ var oc = new Octranspo({
     apiKey: '5434c70b0ded082b2b35cd033ec52301'
 });
 
+var resultArr = [];
+
 module.exports = NodeHelper.create({
 
     start: function(){
@@ -22,22 +24,28 @@ module.exports = NodeHelper.create({
     getData: function() {
         var self = this;
 
-        oc.getNextTripsForStop(self.config.routeNo, self.config.stopNo, function(err, result){
-            if (err) {
-                console.log(err);
-                console.log("Stop No: " + self.config.stopNo + "\n"
-                    + "Route No: " + self.config.routeNo);
-            } else {
-                if (self.config.debug) {
-                    console.log("Sending notif back to module.");
-                    console.log(result);
-                }
-                self.sendSocketNotification('RESPONSE', result);
+        return new Promise((resolve, reject) => {
+            for (var i in self.config.busInfo) {
+                oc.getNextTripsForStop(self.config.busInfo[i].routeNo, self.config.busInfo[i].stopNo, function (err, result) {
+                    if (err) {
+                        console.log(err);
+                        console.log("Stop No: " + self.config.busInfo[i].stopNo + "\n"
+                            + "Route No: " + self.config.busInfo[i].routeNo);
+                        reject();
+                    } else {
+                        if (self.config.debug) {
+                            console.log("Pushing result to resultArr.");
+                        }
+                        resultArr.push(result);
+                    }
+                });
             }
+            resolve();
         });
     },
 
     socketNotificationReceived: function(notification, payload){
+        var self = this;
         if (notification === 'GETDATA') {
             this.config = payload;
 
@@ -45,7 +53,10 @@ module.exports = NodeHelper.create({
                 console.log("Notif receieved. Getting data from OC API.");
             }
 
-            this.getData();
+            this.getData().then(() => {
+                self.sendSocketNotification('RESPONSE', resultArr);
+                resultArr = [];
+            }).catch(err => console.log(err));
         }
     }
 });
