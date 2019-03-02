@@ -5,25 +5,37 @@ Module.register('oc-test', {
     defaults: {
         appID: '9fc072f0',
         apiID: '5434c70b0ded082b2b35cd033ec52301',
-        refreshInterval: (1000*60), // refresh every 15s
+        refreshInterval: (1000*60)/4, // refresh every 15s
         timeFormat: 'HH:mm',
         debug: true,
-        busInfo: null,
         stopNo: 3002,
         routeNo: 61,
-        routeDirection: null, // 0 for Eastbound, 1 for Westbound, null for 1 direction
-        displaymode: 'default'
+        displayMode: 'default',
+
+        busInfo: [{
+            stopNo: 3002,
+            routeNo: 97,
+            direction: null,
+        }, {
+            stopNo: 3001,
+            routeNo: 85,
+            direction: null,
+        }, {
+            stopNo: 2487,
+            routeNo: 7,
+            direction: null,
+        }],
     },
 
     start: function() {
         Log.info("Starting module: " + this.name);
 
-        if(!Array.isArray(this.config.busInfo)) {
-            this.config.busInfo = [];
-        }
-
         if (this.config.debug) {
             Log.info("Sending Notif to Node Helper.");
+        }
+
+        if (this.config.refreshInterval < (1000*60)/4) { // refresh no quicker than 15s
+            this.config.refreshInterval = (1000*60)/4;
         }
 
         this.resume();
@@ -50,61 +62,58 @@ Module.register('oc-test', {
             return wrapper;
         }
 
-        if (!this.departures.length) {
+        if (!this.stops) {
             wrapper.innerHTML = this.translate("NODATA");
             return wrapper;
         }
 
-        var table = document.createElement("table");
-        table.id = "someTable";
-        table.className = "some class name";
+        for (var stop in this.stops) {
+            var table = document.createElement("table");
 
-        if (this.config.displaymode === "default") {
-            var row = document.createElement("tr");
-            var stopHeader = document.createElement("th");
-            var scheduleHeader = document.createElement("th");
-            var gpsHeader = document.createElement("th");
+            if (this.config.displayMode === "default") {
+                var row = document.createElement("tr");
+                var stopHeader = document.createElement("th");
+                var scheduleHeader = document.createElement("th");
+                var gpsHeader = document.createElement("th");
 
-            scheduleHeader.innerHTML = this.translate("schedule");
-            gpsHeader.innerHTML = "GPS";
+                scheduleHeader.innerHTML = "Schedule";
+                gpsHeader.innerHTML = "GPS";
+                stopHeader.innerHTML = this.stops[stop][0].StopLabel;
 
-            // Refactor for multiple stops
-            stopHeader.innerHTML = this.departures[0].StopLabel;
-
-            // stopHeader.className = "stop class name";
-            // scheduleHeader.className = "scheduled class name";
-            // gpsHeader.className = "gps class name";
-
-            row.appendChild(stopHeader);
-            row.appendChild(scheduleHeader);
-            row.appendChild(gpsHeader);
-
-            table.appendChild(row);
+                row.appendChild(stopHeader);
+                row.appendChild(scheduleHeader);
+                row.appendChild(gpsHeader);
 
 
-            var row = document.createElement("tr");
+                table.appendChild(row);
+                wrapper.appendChild(table);
 
-            // TODO: fix cells
-            for (var i in this.departures) {
-                var currentDeparture = this.departures[i];
+                for (var trip in this.stops[stop]) {
+                    var tripRow = document.createElement("tr");
+                    var currentDeparture = this.stops[stop][trip];
 
-                var departureRow = document.createElement("td");
-                departureRow.innerHTML = currentDeparture.RouteNo + " - " + currentDeparture.TripDestination;
+                    var departure = document.createElement("td");
 
-                var scheduleRow = document.createElement("td");
-                if (currentDeparture.AdjustmentAge === -1) { // No GPS adjusted time found
-                    scheduleRow.innerHTML = moment().add(currentDeparture.AdjustedScheduleTime, 'minutes').format('hh:mm A');
-                } else { // GPS adjusted time found
-                    scheduleRow.innerHTML = "--";
+                    departure.innerHTML = currentDeparture.RouteNo + " - " + currentDeparture.TripDestination;
+
+                    var scheduled = document.createElement("td");
+                    var gps = document.createElement("td");
+
+
+                    if (currentDeparture.AdjustmentAge == -1) { // No GPS adjusted time found
+                        scheduled.innerHTML = moment().add(currentDeparture.AdjustedScheduleTime, 'minutes').format('hh:mm A');
+                        gps.innerHTML = "--";
+                    } else { // GPS adjusted time found
+                        gps.innerHTML = moment().add(currentDeparture.AdjustedScheduleTime, 'minutes').format('hh:mm A');
+                        scheduled.innerHTML = "--";
+                    }
+
+                    tripRow.appendChild(departure);
+                    tripRow.appendChild(scheduled);
+                    tripRow.appendChild(gps);
+                    table.appendChild(tripRow);
                 }
-
-                var gpsRow = document.createElement("td");
-                if (currentDeparture.AdjustmentAge === -1) { // No GPS adjusted time found
-                    gpsRow.innerHTML = "--";
-                } else { // GPS adjusted time found
-                    scheduleRow.innerHTML = moment().add(currentDeparture.AdjustedScheduleTime, 'minutes').format('hh:mm A');
-                }
-
+                wrapper.appendChild(table);
             }
         }
 
@@ -124,8 +133,8 @@ Module.register('oc-test', {
 
 
     // Process bus time JSON object into departures array
-    processData: function(bus) {
-        if (!bus) {
+    processData: function(stopArr) {
+        if (!stopArr) {
             Log.error(this.name + ": Could not parse bus times.");
             return;
         }
@@ -134,43 +143,54 @@ Module.register('oc-test', {
             Log.info(this.name + ": Processing bus data.");
         }
 
-        this.departures = [];
+        this.stops = [];
+        var departures = [];
 
-        if (!Array.isArray(bus.Route.RouteDirection)) {
-            for (var i in bus.Route.RouteDirection.Trips.Trip) {
-                this.departures.push({
-                    StopNo: bus.StopNo,
-                    StopLabel: bus.StopLabel,
-                    RouteNo: bus.Route.RouteDirection.RouteNo,
-                    TripDestination:  bus.Route.RouteDirection.Trips.Trip[i].TripDestination,
-                    AdjustedScheduleTime: bus.Route.RouteDirection.Trips.Trip[i].AdjustedScheduleTime,
-                    BusType: bus.Route.RouteDirection.Trips.Trip[i].BusType,
-                    AdjustmentAge: bus.Route.RouteDirection.Trips.Trip[i].AdjustmentAge
-                });
-            }
-        } else {
-            if (this.config.direction === null || this.config.direction > 1 || this.config.direction < 0) {
-                Log.error("Please specify a direction");
-                Log.error(bus.Route.RouteDirection[0].Direction + ": 0");
-                Log.error(bus.Route.RouteDirection[1].Direction + ": 1");
-            } else {
-                for (var i in bus.Route.RouteDirection[this.config.direction].Trips.Trip) {
-                    this.departures.push({
-                        StopNo: bus.StopNo,
-                        StopLabel: bus.StopLabel,
-                        RouteNo: bus.Route.RouteDirection[this.config.direction].RouteNo,
-                        TripDestination:  bus.Route.RouteDirection[this.config.direction].Trips.Trip[i].TripDestination,
-                        AdjustedScheduleTime: bus.Route.RouteDirection[this.config.direction].Trips.Trip[i].AdjustedScheduleTime,
-                        BusType: bus.Route.RouteDirection[this.config.direction].Trips.Trip[i].BusType,
-                        AdjustmentAge: bus.Route.RouteDirection[this.config.direction].Trips.Trip[i].AdjustmentAge
+        for (var stop in stopArr) {
+            if (!Array.isArray(stopArr[stop].Route.RouteDirection)) {
+                for (var trip in stopArr[stop].Route.RouteDirection.Trips.Trip) {
+                    departures.push({
+                        StopNo: stopArr[stop].StopNo,
+                        StopLabel: stopArr[stop].StopLabel,
+                        RouteNo: stopArr[stop].Route.RouteDirection.RouteNo,
+                        TripDestination: stopArr[stop].Route.RouteDirection.Trips.Trip[trip].TripDestination,
+                        AdjustedScheduleTime: stopArr[stop].Route.RouteDirection.Trips.Trip[trip].AdjustedScheduleTime,
+                        BusType: stopArr[stop].Route.RouteDirection.Trips.Trip[trip].BusType,
+                        AdjustmentAge: stopArr[stop].Route.RouteDirection.Trips.Trip[trip].AdjustmentAge
                     });
+                }
+                this.stops.push(departures);
+                departures = [];
+            } else {
+                if (this.config.busInfo[stop].direction === null || this.config.busInfo[stop].direction > 1 || this.config.busInfo[stop].direction < 0) {
+                    Log.error("Please specify a direction");
+                    Log.error(stopArr[stop].Route.RouteDirection[0].Direction + ": 0");
+                    Log.error(stopArr[stop].Route.RouteDirection[1].Direction + ": 1");
+                } else {
+                    for (var trip in bus.Route.RouteDirection[this.config.busInfo[stop].direction].Trips.Trip) {
+                        departures.push({
+                            StopNo: stopArr[stop].StopNo,
+                            StopLabel: stopArr[stop].StopLabel,
+                            RouteNo: stopArr[stop].Route.RouteDirection[this.config.direction].RouteNo,
+                            TripDestination: stopArr[stop].Route.RouteDirection[this.config.direction].Trips.Trip[trip].TripDestination,
+                            AdjustedScheduleTime: stopArr[stop].Route.RouteDirection[this.config.direction].Trips.Trip[trip].AdjustedScheduleTime,
+                            BusType: stopArr[stop].Route.RouteDirection[this.config.direction].Trips.Trip[trip].BusType,
+                            AdjustmentAge: stopArr[stop].Route.RouteDirection[this.config.direction].Trips.Trip[trip].AdjustmentAge
+                        });
+                    }
+                    this.stops.push(departures);
+                    departures = [];
                 }
             }
         }
 
         this.loaded = true;
         this.updateDom();
-        Log.info(this.departures);
+        Log.info(this.stops);
+    },
+
+    sortStops: function() {
+
     },
 
 
