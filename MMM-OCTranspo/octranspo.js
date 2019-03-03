@@ -5,7 +5,7 @@ Module.register('oc-test', {
     defaults: {
         appID: '9fc072f0',
         apiID: '5434c70b0ded082b2b35cd033ec52301',
-        refreshInterval: (1000*60)/4, // refresh every 15s
+        refreshInterval: (1000*60)/8, // refresh every 15s
         timeFormat: 'HH:mm',
         debug: true,
         stopNo: 3002,
@@ -27,6 +27,14 @@ Module.register('oc-test', {
         }],
     },
 
+    getScripts: function() {
+        return ["moment.js"];
+    },
+
+    getStyles: function() {
+        return ["oc-test.css"];
+    },
+
     start: function() {
         Log.info("Starting module: " + this.name);
 
@@ -35,7 +43,7 @@ Module.register('oc-test', {
         }
 
         if (this.config.refreshInterval < (1000*60)/4) { // refresh no quicker than 15s
-            this.config.refreshInterval = (1000*60)/4;
+            //this.config.refreshInterval = (1000*60)/4;
         }
 
         this.resume();
@@ -69,12 +77,17 @@ Module.register('oc-test', {
 
         for (var stop in this.stops) {
             var table = document.createElement("table");
+            table.className = "stop_table";
 
             if (this.config.displayMode === "default") {
                 var row = document.createElement("tr");
                 var stopHeader = document.createElement("th");
                 var scheduleHeader = document.createElement("th");
                 var gpsHeader = document.createElement("th");
+
+                stopHeader.className = "tableth";
+                scheduleHeader.className = "tableth";
+                gpsHeader.className = "tableth";
 
                 scheduleHeader.innerHTML = "Schedule";
                 gpsHeader.innerHTML = "GPS";
@@ -83,7 +96,6 @@ Module.register('oc-test', {
                 row.appendChild(stopHeader);
                 row.appendChild(scheduleHeader);
                 row.appendChild(gpsHeader);
-
 
                 table.appendChild(row);
                 wrapper.appendChild(table);
@@ -98,6 +110,10 @@ Module.register('oc-test', {
 
                     var scheduled = document.createElement("td");
                     var gps = document.createElement("td");
+
+                    departure.className = "tabletr";
+                    scheduled.className = "tabletr";
+                    gps.className = "tabletr";
 
 
                     if (currentDeparture.AdjustmentAge == -1) { // No GPS adjusted time found
@@ -184,15 +200,25 @@ Module.register('oc-test', {
             }
         }
 
-        this.loaded = true;
-        this.updateDom();
-        Log.info(this.stops);
+        if (this.debug === true) {
+            Log.info(this.stops);
+        }
+        this.sortStops();
     },
 
+    // Sort this.stops on stop number
     sortStops: function() {
 
-    },
+        function dynamicSort(a, b) {
+            if (a[0].StopNo < b[0].StopNo) return -1;
+            if (a[0].StopNo > b[0].StopNo) return 1;
+            return 0;
+        }
 
+        this.stops.sort(dynamicSort);
+        this.loaded = true;
+        this.updateDom();
+    },
 
     // Receive data bus time JSON object from node helper
     socketNotificationReceived: function(notification, payload) {
